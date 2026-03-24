@@ -9,20 +9,32 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 from datetime import date, timedelta
 from functools import wraps
+from urllib.parse import urlparse
 import psycopg2, psycopg2.extras, os, io, csv
 
 app = Flask(__name__)
 app.secret_key = 'cmr-library-secret-key-change-in-production-2024!'
 
 # ── PostgreSQL connection config ─────────────────────────────────────────────
-# Change these values to match your PostgreSQL setup
-DB_CONFIG = {
-    'host':     os.environ.get('DB_HOST', 'localhost'),
-    'port':     os.environ.get('DB_PORT', '5432'),
-    'dbname':   os.environ.get('DB_NAME', 'cmr_library'),
-    'user':     os.environ.get('DB_USER', 'postgres'),
-    'password': os.environ.get('DB_PASSWORD', 'Love@123'),
-}
+DATABASE_URL = os.environ.get('DATABASE_URL')
+
+if DATABASE_URL:
+    parsed = urlparse(DATABASE_URL)
+    DB_CONFIG = {
+        'host':     parsed.hostname,
+        'port':     parsed.port or 5432,
+        'dbname':   parsed.path[1:],
+        'user':     parsed.username,
+        'password': parsed.password,
+    }
+else:
+    DB_CONFIG = {
+        'host':     os.environ.get('DB_HOST', 'localhost'),
+        'port':     os.environ.get('DB_PORT', '5432'),
+        'dbname':   os.environ.get('DB_NAME', 'cmr_library'),
+        'user':     os.environ.get('DB_USER', 'postgres'),
+        'password': os.environ.get('DB_PASSWORD', 'Love@123'),
+    }
 
 UPLOAD_DIR  = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'static', 'uploads', 'covers')
 ALLOWED_EXT = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
@@ -48,7 +60,6 @@ def qry(sql, params=(), one=False, commit=False):
     cur.execute(sql, params)
     if commit:
         db.commit()
-        # For INSERT ... RETURNING id
         try:
             row = cur.fetchone()
             return row['id'] if row else None
@@ -121,7 +132,7 @@ def seed_data(db):
     if cur.fetchone()['cnt'] == 0:
         cur.execute(
             "INSERT INTO users (username, password, role, name) VALUES (%s, %s, %s, %s)",
-            ('librarian', generate_password_hash('lib123'), 'librarian', 'Shruthi')
+            ('librarian', generate_password_hash('lib123'), 'librarian', 'Ms. Shruthi')
         )
 
     cur.execute("SELECT COUNT(*) as cnt FROM books")
@@ -147,7 +158,6 @@ def seed_data(db):
             books)
 
         today = date.today()
-        # Fetch inserted book IDs by accession number
         cur.execute("SELECT id, accession_number FROM books WHERE accession_number IN ('CSE003','CSE005','CSE012')")
         id_map = {r['accession_number']: r['id'] for r in cur.fetchall()}
 
@@ -179,7 +189,6 @@ def login_required(f):
 
 def book_dict(row):
     d = dict(row)
-    # Convert date objects to strings for JSON
     for k in ['date_of_entry']:
         if d.get(k) and not isinstance(d[k], str):
             d[k] = str(d[k])
