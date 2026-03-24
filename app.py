@@ -173,6 +173,10 @@ def seed_data(db):
 
     db.commit()
 
+# ⭐ ADD THIS BLOCK
+with app.app_context():
+    init_db()
+
 
 # ── Auth ─────────────────────────────────────────────────────────────────────
 
