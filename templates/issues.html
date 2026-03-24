@@ -1,0 +1,403 @@
+{% extends "base.html" %}
+{% block title %}Issue & Return — CMR Library{% endblock %}
+{% block page_title %}Book Circulation{% endblock %}
+{% block breadcrumb %}Issue books to students and manage returns{% endblock %}
+
+{% block extra_css %}
+<style>
+.tabs { display:flex; gap:4px; margin-bottom:20px; }
+.tab-btn {
+  padding:9px 20px;
+  border-radius:8px;
+  border:1px solid var(--border);
+  background:none;
+  color:var(--text-muted);
+  font-family:'DM Sans',sans-serif;
+  font-size:13px;
+  font-weight:600;
+  cursor:pointer;
+  transition:all 0.15s;
+}
+.tab-btn.active {
+  background:var(--gold-dim);
+  border-color:var(--border-gold);
+  color:var(--gold-light);
+}
+.tab-content { display:none; }
+.tab-content.active { display:block; }
+.overdue-row { background:rgba(224,82,82,0.05)!important; }
+.overdue-row:hover { background:rgba(224,82,82,0.08)!important; }
+.days-badge {
+  display:inline-flex;
+  align-items:center;
+  padding:2px 8px;
+  border-radius:4px;
+  font-size:10px;
+  font-weight:700;
+  background:rgba(224,82,82,0.15);
+  color:#e87878;
+}
+.book-lookup-result {
+  padding:12px;
+  background:var(--bg);
+  border:1px solid var(--border-gold);
+  border-radius:8px;
+  margin-top:8px;
+  display:none;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+
+<div class="tabs">
+  <button class="tab-btn active" onclick="switchTab('issues')">📤 Issue Book</button>
+  <button class="tab-btn" onclick="switchTab('returns')">📥 Return Book</button>
+  <button class="tab-btn" onclick="switchTab('all')">📋 All Records</button>
+</div>
+
+<!-- Issue Tab -->
+<div class="tab-content active" id="tab-issues">
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+
+    <div class="card">
+      <div class="card-header"><div class="card-title">📤 Issue Book to Student</div></div>
+      <div class="card-body">
+        <div style="display:flex;flex-direction:column;gap:14px">
+
+          <div class="field">
+            <label>Accession Number *</label>
+            <input type="text" id="i-accession" placeholder="e.g. CSE003" oninput="lookupBook()">
+            <div class="book-lookup-result" id="book-lookup">
+              <div id="book-info-text" style="font-size:13px"></div>
+            </div>
+          </div>
+
+          <div class="field">
+            <label>Student Full Name *</label>
+            <input type="text" id="i-student" placeholder="Student's full name">
+          </div>
+
+          <div class="field">
+            <label>USN / Roll Number *</label>
+            <input type="text" id="i-usn" placeholder="e.g. 1CS21CS042">
+          </div>
+
+          <div class="field">
+            <label>Return Date *</label>
+            <input type="date" id="i-return-date">
+          </div>
+
+          <button class="btn btn-primary" onclick="issueBook()" style="margin-top:4px">
+            📤 Issue Book
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Recently Issued -->
+    <div class="card">
+      <div class="card-header"><div class="card-title">🕐 Recently Issued</div></div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Book</th><th>Student</th><th>Due Date</th><th>Status</th></tr></thead>
+          <tbody id="recent-issues-mini">
+            <tr><td colspan="4"><div class="loading-spinner"><div class="spinner"></div></div></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Return Tab -->
+<div class="tab-content" id="tab-returns">
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+
+    <div class="card">
+      <div class="card-header"><div class="card-title">📥 Process Book Return</div></div>
+      <div class="card-body">
+        <div style="display:flex;flex-direction:column;gap:14px">
+          <div class="field">
+            <label>Search by USN or Accession Number</label>
+            <input type="text" id="r-search" placeholder="Student USN or book accession" oninput="debounceReturnSearch()">
+          </div>
+          <div id="return-results">
+            <div class="empty-state"><div class="empty-icon">🔍</div><div class="empty-title">Search for a student or book</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Overdue Books -->
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">⚠️ Overdue Books</div>
+        <button class="btn btn-outline btn-sm" onclick="window.open('/api/reports/export?type=overdue','_blank')">⬇️ Export</button>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Student</th><th>Book</th><th>Due</th><th>Overdue</th></tr></thead>
+          <tbody id="overdue-body">
+            <tr><td colspan="4"><div class="loading-spinner"><div class="spinner"></div></div></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- All Records Tab -->
+<div class="tab-content" id="tab-all">
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">📋 All Issue Records</div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <select class="filter-select" id="all-status-filter" onchange="loadAllIssues()">
+          <option value="">All Status</option>
+          <option value="Issued">Issued</option>
+          <option value="Returned">Returned</option>
+        </select>
+        <div class="search-input-wrap" style="max-width:220px">
+          <span class="s-icon">🔍</span>
+          <input type="text" id="all-search" placeholder="Search…" oninput="debounceAllSearch()">
+        </div>
+        <button class="btn btn-outline btn-sm" onclick="window.open('/api/reports/export?type=issued_books','_blank')">⬇️ Export</button>
+      </div>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr>
+          <th>#</th><th>Accession</th><th>Book Title</th><th>Student</th>
+          <th>USN</th><th>Issue Date</th><th>Due Date</th><th>Returned On</th>
+          <th>Fine (₹)</th><th>Status</th>
+        </tr></thead>
+        <tbody id="all-issues-body">
+          <tr><td colspan="10"><div class="loading-spinner"><div class="spinner"></div></div></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="pagination" id="all-pag" style="display:none">
+      <span id="all-pag-info"></span>
+      <div class="page-btns" id="all-page-btns"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Return Confirm Modal -->
+<div class="modal-overlay" id="return-modal">
+  <div class="modal" style="max-width:440px">
+    <div class="modal-header">
+      <div class="modal-title">Confirm Return</div>
+      <button class="modal-close" onclick="closeModal('return-modal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div id="return-detail" style="font-size:13px;color:var(--text-muted);line-height:1.8"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('return-modal')">Cancel</button>
+      <button class="btn btn-success" onclick="confirmReturn()">✅ Confirm Return</button>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+// ── Tab switching ──
+function switchTab(name) {
+  document.querySelectorAll('.tab-btn').forEach((b,i) => {
+    b.classList.toggle('active', ['issues','returns','all'][i] === name);
+  });
+  document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+  document.getElementById(`tab-${name}`).classList.add('active');
+  if (name === 'all') loadAllIssues();
+  if (name === 'returns') { loadOverdue(); }
+}
+
+// ── Set default return date (14 days) ──
+const rd = new Date(); rd.setDate(rd.getDate()+14);
+document.getElementById('i-return-date').value = rd.toISOString().split('T')[0];
+
+// ── Book Lookup ──
+let lookupTimer;
+async function lookupBook() {
+  const acc = document.getElementById('i-accession').value.trim();
+  const el = document.getElementById('book-lookup');
+  if (acc.length < 3) { el.style.display='none'; return; }
+  clearTimeout(lookupTimer);
+  lookupTimer = setTimeout(async () => {
+    const res = await fetch(`/api/books?q=${acc}&per_page=1`);
+    const d = await res.json();
+    if (d.books.length) {
+      const b = d.books[0];
+      const avail = b.available_quantity > 0;
+      el.style.display = 'block';
+      el.style.borderColor = avail ? 'var(--border-gold)' : 'rgba(224,82,82,0.4)';
+      document.getElementById('book-info-text').innerHTML = `
+        <div style="font-weight:600;color:var(--text)">${b.title}</div>
+        <div style="font-size:12px;color:var(--text-muted)">${b.author} · ${b.category||''}</div>
+        <div style="margin-top:6px">
+          <span class="badge badge-${avail?'available':'issued'}">${avail?`${b.available_quantity} Available`:'Not Available'}</span>
+        </div>`;
+    } else {
+      el.style.display = 'block';
+      document.getElementById('book-info-text').innerHTML = '<span style="color:var(--danger)">Book not found</span>';
+    }
+  }, 400);
+}
+
+// ── Issue Book ──
+async function issueBook() {
+  const acc = document.getElementById('i-accession').value.trim();
+  const student = document.getElementById('i-student').value.trim();
+  const usn = document.getElementById('i-usn').value.trim();
+  const returnDate = document.getElementById('i-return-date').value;
+  if (!acc || !student || !usn || !returnDate) { showToast('Please fill all required fields', 'error'); return; }
+
+  const res = await fetch('/api/issues', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ accession_number: acc, student_name: student, usn, return_date: returnDate })
+  });
+  const d = await res.json();
+  if (d.error) { showToast(d.error, 'error'); return; }
+  showToast(`Book issued to ${student} successfully!`, 'success');
+  document.getElementById('i-accession').value = '';
+  document.getElementById('i-student').value = '';
+  document.getElementById('i-usn').value = '';
+  document.getElementById('book-lookup').style.display = 'none';
+  loadRecentIssues();
+}
+
+// ── Load Recent Issues ──
+async function loadRecentIssues() {
+  const res = await fetch('/api/issues?status=Issued&per_page=8');
+  const d = await res.json();
+  const tbody = document.getElementById('recent-issues-mini');
+  tbody.innerHTML = d.issues.map(i => `
+    <tr class="${i.overdue?'overdue-row':''}">
+      <td style="font-size:12px">${(i.book_title||'').slice(0,25)}</td>
+      <td><div style="font-size:12px">${i.student_name}</div><div style="font-size:10px;color:var(--text-muted)">${i.usn}</div></td>
+      <td style="font-size:12px">${i.return_date}</td>
+      <td><span class="badge badge-${i.overdue?'overdue':'issued'}">${i.overdue?'Overdue':'Issued'}</span></td>
+    </tr>`).join('') || '<tr><td colspan="4"><div class="empty-state"><div class="empty-title">No active issues</div></div></td></tr>';
+}
+
+// ── Return Search ──
+let returnSearchTimer;
+function debounceReturnSearch() {
+  clearTimeout(returnSearchTimer);
+  returnSearchTimer = setTimeout(searchForReturn, 400);
+}
+
+async function searchForReturn() {
+  const q = document.getElementById('r-search').value.trim();
+  if (q.length < 2) { document.getElementById('return-results').innerHTML = '<div class="empty-state"><div class="empty-icon">🔍</div><div class="empty-title">Search for a student or book</div></div>'; return; }
+  const res = await fetch(`/api/issues?q=${q}&status=Issued&per_page=10`);
+  const d = await res.json();
+  if (!d.issues.length) {
+    document.getElementById('return-results').innerHTML = '<div class="empty-state"><div class="empty-icon">📭</div><div class="empty-title">No active issues found</div></div>';
+    return;
+  }
+  document.getElementById('return-results').innerHTML = d.issues.map(i => `
+    <div style="padding:12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center">
+      <div>
+        <div style="font-weight:600;font-size:13px">${i.book_title}</div>
+        <div style="font-size:12px;color:var(--text-muted)"><b>${i.student_name}</b> · ${i.usn}</div>
+        <div style="font-size:11px;color:var(--text-dim)">Due: ${i.return_date} ${i.overdue?`<span class="days-badge">+${i.days_overdue}d overdue</span>`:''}</div>
+      </div>
+      <button class="btn btn-success btn-sm" onclick="prepareReturn(${i.id},'${i.book_title.replace(/'/g,"\\'")}','${i.student_name}','${i.return_date}',${i.overdue?i.days_overdue:0})">Return</button>
+    </div>`).join('');
+}
+
+let returnIssueId = null;
+function prepareReturn(id, title, student, dueDate, daysOverdue) {
+  returnIssueId = id;
+  const fine = daysOverdue * 2;
+  document.getElementById('return-detail').innerHTML = `
+    <div><b>Book:</b> ${title}</div>
+    <div><b>Student:</b> ${student}</div>
+    <div><b>Due Date:</b> ${dueDate}</div>
+    ${daysOverdue > 0 ? `<div style="margin-top:8px;padding:8px;background:rgba(224,82,82,0.1);border-radius:6px;color:var(--danger)">
+      ⚠️ <b>${daysOverdue} days overdue</b> — Fine: <b>₹${fine}</b>
+    </div>` : '<div style="color:var(--success)">✅ Returned on time</div>'}`;
+  openModal('return-modal');
+}
+
+async function confirmReturn() {
+  const res = await fetch(`/api/issues/${returnIssueId}/return`, { method: 'POST' });
+  const d = await res.json();
+  if (d.error) { showToast(d.error, 'error'); return; }
+  showToast(d.fine > 0 ? `Book returned. Fine: ₹${d.fine}` : 'Book returned successfully!', 'success');
+  closeModal('return-modal');
+  document.getElementById('r-search').value = '';
+  document.getElementById('return-results').innerHTML = '<div class="empty-state"><div class="empty-icon">✅</div><div class="empty-title">Return processed</div></div>';
+  loadOverdue();
+}
+
+// ── Overdue ──
+async function loadOverdue() {
+  const res = await fetch('/api/issues?status=Issued&per_page=50');
+  const d = await res.json();
+  const overdue = d.issues.filter(i => i.overdue);
+  const tbody = document.getElementById('overdue-body');
+  tbody.innerHTML = overdue.length
+    ? overdue.map(i => `
+        <tr class="overdue-row">
+          <td><div style="font-size:12px;font-weight:600">${i.student_name}</div><div style="font-size:11px;color:var(--text-muted)">${i.usn}</div></td>
+          <td style="font-size:12px">${(i.book_title||'').slice(0,25)}</td>
+          <td style="font-size:12px;color:var(--danger)">${i.return_date}</td>
+          <td><span class="days-badge">+${i.days_overdue}d (₹${i.days_overdue*2})</span></td>
+        </tr>`).join('')
+    : '<tr><td colspan="4"><div class="empty-state"><div class="empty-icon">✅</div><div class="empty-title">No overdue books</div></div></td></tr>';
+}
+
+// ── All Issues ──
+let allPage = 1, allSearchTimer;
+function debounceAllSearch() { clearTimeout(allSearchTimer); allSearchTimer = setTimeout(loadAllIssues, 350); }
+
+async function loadAllIssues() {
+  const q = document.getElementById('all-search').value;
+  const status = document.getElementById('all-status-filter').value;
+  const res = await fetch(`/api/issues?q=${q}&status=${status}&page=${allPage}&per_page=20`);
+  const d = await res.json();
+  const tbody = document.getElementById('all-issues-body');
+  tbody.innerHTML = d.issues.length
+    ? d.issues.map((i,idx) => `
+        <tr class="${i.overdue?'overdue-row':''}">
+          <td style="color:var(--text-dim);font-size:12px">${(allPage-1)*20+idx+1}</td>
+          <td><span style="font-family:monospace;font-size:12px;color:var(--gold)">${i.accession_number}</span></td>
+          <td style="font-size:13px">${(i.book_title||'').slice(0,30)}</td>
+          <td>${i.student_name}</td>
+          <td style="font-size:12px;color:var(--text-muted)">${i.usn}</td>
+          <td style="font-size:12px">${i.issue_date}</td>
+          <td style="font-size:12px;color:${i.overdue?'var(--danger)':'inherit'}">${i.return_date}</td>
+          <td style="font-size:12px;color:var(--text-muted)">${i.actual_return_date||'—'}</td>
+          <td style="font-size:12px;color:${i.fine>0?'var(--danger)':'var(--success)'}">${i.fine>0?'₹'+i.fine:'—'}</td>
+          <td><span class="badge badge-${i.overdue?'overdue':i.status.toLowerCase()}">${i.overdue?'Overdue':i.status}</span></td>
+        </tr>`).join('')
+    : '<tr><td colspan="10"><div class="empty-state"><div class="empty-icon">📋</div><div class="empty-title">No records found</div></div></td></tr>';
+
+  const pag = document.getElementById('all-pag');
+  if (d.total > 20) {
+    pag.style.display = 'flex';
+    document.getElementById('all-pag-info').textContent = `${d.total} total records`;
+    let btns = '';
+    for (let p = 1; p <= d.pages; p++) btns += `<button class="page-btn${p===allPage?' active':''}" onclick="allGoPage(${p})">${p}</button>`;
+    document.getElementById('all-page-btns').innerHTML = btns;
+  } else pag.style.display = 'none';
+}
+
+function allGoPage(p) { allPage = p; loadAllIssues(); }
+
+// ── Init ──
+loadRecentIssues();
+loadOverdue();
+
+// URL params for tab switching
+const urlParams = new URLSearchParams(window.location.search);
+if (urlParams.get('tab') === 'return') switchTab('returns');
+</script>
+{% endblock %}

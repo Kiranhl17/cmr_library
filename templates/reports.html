@@ -1,0 +1,121 @@
+{% extends "base.html" %}
+{% block title %}Reports — CMR Library{% endblock %}
+{% block page_title %}Reports{% endblock %}
+{% block breadcrumb %}Generate and export library reports{% endblock %}
+
+{% block content %}
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:20px;margin-bottom:24px">
+
+  <div class="card">
+    <div class="card-body" style="text-align:center;padding:28px">
+      <div style="font-size:40px;margin-bottom:12px">📚</div>
+      <div style="font-size:16px;font-weight:600;color:var(--text);margin-bottom:6px">All Books Report</div>
+      <div style="font-size:13px;color:var(--text-muted);margin-bottom:16px">Complete catalog of all books in the library</div>
+      <button class="btn btn-primary" onclick="downloadReport('all_books')">⬇️ Download CSV</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-body" style="text-align:center;padding:28px">
+      <div style="font-size:40px;margin-bottom:12px">📤</div>
+      <div style="font-size:16px;font-weight:600;color:var(--text);margin-bottom:6px">Issued Books Report</div>
+      <div style="font-size:13px;color:var(--text-muted);margin-bottom:16px">Currently issued books with student details</div>
+      <button class="btn btn-primary" onclick="downloadReport('issued_books')">⬇️ Download CSV</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-body" style="text-align:center;padding:28px">
+      <div style="font-size:40px;margin-bottom:12px">⚠️</div>
+      <div style="font-size:16px;font-weight:600;color:var(--text);margin-bottom:6px">Overdue Books Report</div>
+      <div style="font-size:13px;color:var(--text-muted);margin-bottom:16px">Books past their return date with fines</div>
+      <button class="btn btn-danger" onclick="downloadReport('overdue')">⬇️ Download CSV</button>
+    </div>
+  </div>
+</div>
+
+<!-- Summary Stats -->
+<div class="card" style="margin-bottom:24px">
+  <div class="card-header"><div class="card-title">📊 Library Summary</div></div>
+  <div class="card-body">
+    <div id="summary-content"><div class="loading-spinner"><div class="spinner"></div> Loading summary…</div></div>
+  </div>
+</div>
+
+<!-- Category-wise Table -->
+<div class="card">
+  <div class="card-header">
+    <div class="card-title">📂 Category-wise Book Count</div>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Category</th><th>Total Books</th><th>Total Copies</th><th>Available</th><th>Issued</th></tr></thead>
+      <tbody id="cat-tbody">
+        <tr><td colspan="5"><div class="loading-spinner"><div class="spinner"></div></div></td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function downloadReport(type) {
+  window.open(`/api/reports/export?type=${type}&format=csv`, '_blank');
+}
+
+async function loadReports() {
+  const [statsRes, booksRes, issuesRes] = await Promise.all([
+    fetch('/api/stats'),
+    fetch('/api/books?per_page=1000'),
+    fetch('/api/issues?per_page=1000')
+  ]);
+  const stats = await statsRes.json();
+  const books = await booksRes.json();
+  const issues = await issuesRes.json();
+
+  // Summary
+  document.getElementById('summary-content').innerHTML = `
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:16px">
+      ${[
+        ['📚','Total Book Titles', stats.total_books],
+        ['📦','Total Copies', books.books.reduce((a,b)=>a+b.quantity,0)],
+        ['✅','Available Copies', stats.available_books],
+        ['📤','Currently Issued', stats.issued_books],
+        ['⚠️','Overdue Books', stats.overdue_books],
+        ['👥','Unique Students', new Set(issues.issues.map(i=>i.usn)).size],
+      ].map(([icon,label,val]) => `
+        <div style="padding:16px;background:var(--bg);border-radius:8px;border:1px solid var(--border);text-align:center">
+          <div style="font-size:26px;margin-bottom:6px">${icon}</div>
+          <div style="font-size:22px;font-family:'Playfair Display',serif;font-weight:700;color:var(--text)">${val}</div>
+          <div style="font-size:11px;color:var(--text-muted);margin-top:2px">${label}</div>
+        </div>`).join('')}
+    </div>`;
+
+  // Category-wise
+  const catMap = {};
+  books.books.forEach(b => {
+    const c = b.category || 'Unknown';
+    if (!catMap[c]) catMap[c] = {count:0,copies:0,available:0,issued:0};
+    catMap[c].count++;
+    catMap[c].copies += b.quantity;
+    catMap[c].available += b.available_quantity;
+    catMap[c].issued += (b.quantity - b.available_quantity);
+  });
+
+  const sorted = Object.entries(catMap).sort((a,b) => b[1].copies - a[1].copies);
+  document.getElementById('cat-tbody').innerHTML = sorted.length
+    ? sorted.map(([cat,d]) => `
+        <tr>
+          <td><span class="badge" style="background:var(--gold-dim);color:var(--gold-light);border:1px solid var(--border-gold)">${cat}</span></td>
+          <td>${d.count}</td>
+          <td>${d.copies}</td>
+          <td style="color:var(--success)">${d.available}</td>
+          <td style="color:${d.issued>0?'var(--warning)':'var(--text-muted)'}">${d.issued}</td>
+        </tr>`).join('')
+    : '<tr><td colspan="5"><div class="empty-state"><div class="empty-title">No data</div></div></td></tr>';
+}
+
+loadReports();
+</script>
+{% endblock %}

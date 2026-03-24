@@ -1,0 +1,382 @@
+{% extends "base.html" %}
+{% block title %}Books Catalog — CMR Library{% endblock %}
+{% block page_title %}Books Catalog{% endblock %}
+{% block breadcrumb %}Manage book collection{% endblock %}
+
+{% block extra_css %}
+<style>
+.cover-thumb {
+  width: 38px; height: 50px;
+  border-radius: 4px;
+  object-fit: cover;
+  background: var(--bg-3);
+  display: flex;align-items:center;justify-content:center;
+  font-size:18px;
+  flex-shrink:0;
+  border: 1px solid var(--border);
+}
+.cover-thumb img { width:100%;height:100%;object-fit:cover;border-radius:4px; }
+.book-row td { vertical-align:middle; }
+.accession-code { font-family:monospace; font-size:12px; color:var(--gold); letter-spacing:0.5px; }
+.actions-cell { display:flex;gap:6px;align-items:center; }
+.upload-zone {
+  border: 2px dashed var(--border);
+  border-radius: 8px;
+  padding: 24px;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 0.2s, background 0.2s;
+}
+.upload-zone:hover { border-color: var(--gold); background: var(--gold-dim); }
+.upload-zone .hint { font-size:12px; color:var(--text-muted); margin-top:6px; }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<!-- Toolbar -->
+<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;flex-wrap:wrap;gap:10px">
+  <div class="filters-row" style="margin-bottom:0;flex:1">
+    <div class="search-input-wrap">
+      <span class="s-icon">🔍</span>
+      <input type="text" id="search-input" placeholder="Search title, author, accession…" oninput="debounceSearch()">
+    </div>
+    <select class="filter-select" id="cat-filter" onchange="loadBooks()">
+      <option value="">All Categories</option>
+    </select>
+    <select class="filter-select" id="status-filter" onchange="loadBooks()">
+      <option value="">All Status</option>
+      <option value="Available">Available</option>
+      <option value="Issued">Issued</option>
+    </select>
+    <select class="filter-select" id="sort-select" onchange="loadBooks()">
+      <option value="date_of_entry|desc">Newest First</option>
+      <option value="title|asc">Title A–Z</option>
+      <option value="title|desc">Title Z–A</option>
+      <option value="accession_number|asc">Accession No.</option>
+    </select>
+  </div>
+  <button class="btn btn-primary" onclick="openModal('book-modal')">➕ Add Book</button>
+</div>
+
+<!-- Books Table -->
+<div class="card">
+  <div class="card-header">
+    <div class="card-title">📖 All Books <span id="book-count" style="font-weight:400;color:var(--text-muted);font-size:12px"></span></div>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-outline btn-sm" onclick="exportBooks()">⬇️ Export CSV</button>
+    </div>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th onclick="changeSort('accession_number')">Accession ↕</th>
+          <th onclick="changeSort('title')">Title ↕</th>
+          <th onclick="changeSort('author')">Author</th>
+          <th>Category</th>
+          <th>Shelf</th>
+          <th>Qty</th>
+          <th>Avail.</th>
+          <th>Status</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody id="books-body">
+        <tr><td colspan="10"><div class="loading-spinner"><div class="spinner"></div> Loading books…</div></td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="pagination" id="books-pagination" style="display:none">
+    <span id="pagination-info"></span>
+    <div class="page-btns" id="page-btns"></div>
+  </div>
+</div>
+
+
+<!-- Add/Edit Book Modal -->
+<div class="modal-overlay" id="book-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title" id="modal-title">Add New Book</div>
+      <button class="modal-close" onclick="closeModal('book-modal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <form id="book-form" onsubmit="return false">
+        <input type="hidden" id="edit-book-id">
+        <div class="form-grid">
+          <div class="field">
+            <label>Accession Number *</label>
+            <input type="text" id="f-accession" placeholder="e.g. CSE025" required>
+          </div>
+          <div class="field">
+            <label>ISBN</label>
+            <input type="text" id="f-isbn" placeholder="ISBN-13 or ISBN-10">
+          </div>
+          <div class="field full">
+            <label>Book Title *</label>
+            <input type="text" id="f-title" placeholder="Full book title" required>
+          </div>
+          <div class="field">
+            <label>Author *</label>
+            <input type="text" id="f-author" placeholder="Author name(s)" required>
+          </div>
+          <div class="field">
+            <label>Publisher</label>
+            <input type="text" id="f-publisher" placeholder="Publisher name">
+          </div>
+          <div class="field">
+            <label>Edition</label>
+            <input type="text" id="f-edition" placeholder="e.g. 3rd">
+          </div>
+          <div class="field">
+            <label>Year of Publication</label>
+            <input type="number" id="f-year" placeholder="e.g. 2023" min="1900" max="2099">
+          </div>
+          <div class="field">
+            <label>Department</label>
+            <select id="f-dept">
+              <option>CSE</option><option>ISE</option><option>ECE</option><option>MECH</option><option>CIVIL</option><option>MBA</option><option>General</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Category</label>
+            <select id="f-category">
+              <option value="">Select Category</option>
+              <option>Programming</option><option>Algorithms</option><option>AI/ML</option>
+              <option>DBMS</option><option>Networks</option><option>OS</option>
+              <option>Software Engineering</option><option>Computer Architecture</option>
+              <option>Web Development</option><option>Cybersecurity</option>
+              <option>Mathematics</option><option>Data Structures</option><option>Other</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Shelf Number</label>
+            <input type="text" id="f-shelf" placeholder="e.g. A1, B3">
+          </div>
+          <div class="field">
+            <label>Quantity</label>
+            <input type="number" id="f-qty" value="1" min="1">
+          </div>
+          <div class="field full">
+            <label>Book Cover Image</label>
+            <div class="upload-zone" onclick="document.getElementById('f-cover').click()">
+              <div style="font-size:28px">🖼️</div>
+              <div>Click to upload cover image</div>
+              <div class="hint">PNG, JPG, WEBP — max 5MB</div>
+            </div>
+            <input type="file" id="f-cover" accept="image/*" style="display:none" onchange="previewCover(this)">
+            <img id="cover-preview" style="display:none;max-height:100px;margin-top:8px;border-radius:6px">
+          </div>
+        </div>
+      </form>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('book-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveBook()">💾 Save Book</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- Delete Confirm Modal -->
+<div class="modal-overlay" id="del-modal">
+  <div class="modal" style="max-width:400px">
+    <div class="modal-header">
+      <div class="modal-title">Confirm Delete</div>
+      <button class="modal-close" onclick="closeModal('del-modal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <p style="color:var(--text-muted)">Are you sure you want to delete <b id="del-book-title" style="color:var(--text)"></b>? This action cannot be undone.</p>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('del-modal')">Cancel</button>
+      <button class="btn btn-danger" onclick="confirmDelete()">🗑️ Delete</button>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+let currentPage = 1;
+let totalPages = 1;
+let deleteBookId = null;
+let searchTimer = null;
+let sortBy = 'date_of_entry', sortDir = 'desc';
+
+function debounceSearch() {
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(() => { currentPage = 1; loadBooks(); }, 350);
+}
+
+function changeSort(col) {
+  if (sortBy === col) sortDir = sortDir === 'asc' ? 'desc' : 'asc';
+  else { sortBy = col; sortDir = 'asc'; }
+  loadBooks();
+}
+
+async function loadCategories() {
+  const res = await fetch('/api/books/categories');
+  const cats = await res.json();
+  const sel = document.getElementById('cat-filter');
+  cats.forEach(c => { const o = document.createElement('option'); o.value = c; o.textContent = c; sel.appendChild(o); });
+}
+
+async function loadBooks() {
+  const q = document.getElementById('search-input').value;
+  const cat = document.getElementById('cat-filter').value;
+  const status = document.getElementById('status-filter').value;
+  const sortVal = document.getElementById('sort-select').value.split('|');
+  const sb = sortVal[0], sd = sortVal[1];
+
+  const params = new URLSearchParams({ q, category: cat, status, page: currentPage, per_page: 20, sort_by: sb, sort_dir: sd });
+  const res = await fetch(`/api/books?${params}`);
+  const data = await res.json();
+
+  totalPages = data.pages;
+  document.getElementById('book-count').textContent = `— ${data.total} books`;
+
+  const tbody = document.getElementById('books-body');
+  if (!data.books.length) {
+    tbody.innerHTML = '<tr><td colspan="10"><div class="empty-state"><div class="empty-icon">📚</div><div class="empty-title">No books found</div><div class="empty-desc">Try adjusting your search or filters</div></div></td></tr>';
+  } else {
+    tbody.innerHTML = data.books.map((b, i) => `
+      <tr class="book-row">
+        <td style="color:var(--text-dim);font-size:12px">${(currentPage-1)*20+i+1}</td>
+        <td><span class="accession-code">${b.accession_number}</span></td>
+        <td>
+          <div style="font-weight:500;color:var(--text)">${b.title}</div>
+          ${b.edition ? `<div style="font-size:11px;color:var(--text-muted)">${b.edition} Ed. ${b.year_of_publication||''}</div>` : ''}
+        </td>
+        <td style="color:var(--text-muted)">${b.author}</td>
+        <td><span class="badge" style="background:var(--gold-dim);color:var(--gold-light);border:1px solid var(--border-gold);font-size:10px">${b.category||'—'}</span></td>
+        <td style="color:var(--text-muted)">${b.shelf_number||'—'}</td>
+        <td style="text-align:center">${b.quantity}</td>
+        <td style="text-align:center">${b.available_quantity}</td>
+        <td><span class="badge badge-${b.status.toLowerCase()}">${b.status}</span></td>
+        <td>
+          <div class="actions-cell">
+            <button class="btn-icon" title="Edit" onclick="editBook(${JSON.stringify(b).replace(/"/g,'&quot;')})">✏️</button>
+            <button class="btn-icon" title="Delete" onclick="deleteBook(${b.id},'${b.title.replace(/'/g,"\\'")}')">🗑️</button>
+          </div>
+        </td>
+      </tr>`).join('');
+  }
+
+  // Pagination
+  const pag = document.getElementById('books-pagination');
+  if (data.total > 20) {
+    pag.style.display = 'flex';
+    document.getElementById('pagination-info').textContent = `Showing ${(currentPage-1)*20+1}–${Math.min(currentPage*20, data.total)} of ${data.total}`;
+    let btns = '';
+    for (let p = 1; p <= totalPages; p++) {
+      if (totalPages <= 7 || p === 1 || p === totalPages || Math.abs(p - currentPage) <= 1) {
+        btns += `<button class="page-btn${p===currentPage?' active':''}" onclick="goPage(${p})">${p}</button>`;
+      } else if (Math.abs(p - currentPage) === 2) btns += `<button class="page-btn" disabled>…</button>`;
+    }
+    document.getElementById('page-btns').innerHTML = btns;
+  } else { pag.style.display = 'none'; }
+}
+
+function goPage(p) { currentPage = p; loadBooks(); }
+
+function previewCover(input) {
+  if (input.files && input.files[0]) {
+    const reader = new FileReader();
+    reader.onload = e => {
+      const img = document.getElementById('cover-preview');
+      img.src = e.target.result;
+      img.style.display = 'block';
+    };
+    reader.readAsDataURL(input.files[0]);
+  }
+}
+
+function editBook(b) {
+  document.getElementById('modal-title').textContent = 'Edit Book';
+  document.getElementById('edit-book-id').value = b.id;
+  document.getElementById('f-accession').value = b.accession_number;
+  document.getElementById('f-accession').readOnly = true;
+  document.getElementById('f-isbn').value = b.isbn;
+  document.getElementById('f-title').value = b.title;
+  document.getElementById('f-author').value = b.author;
+  document.getElementById('f-publisher').value = b.publisher;
+  document.getElementById('f-edition').value = b.edition;
+  document.getElementById('f-year').value = b.year_of_publication;
+  document.getElementById('f-dept').value = b.department;
+  document.getElementById('f-category').value = b.category;
+  document.getElementById('f-shelf').value = b.shelf_number;
+  document.getElementById('f-qty').value = b.quantity;
+  openModal('book-modal');
+}
+
+function resetBookForm() {
+  document.getElementById('modal-title').textContent = 'Add New Book';
+  document.getElementById('edit-book-id').value = '';
+  document.getElementById('book-form').reset();
+  document.getElementById('f-accession').readOnly = false;
+  document.getElementById('cover-preview').style.display = 'none';
+}
+
+document.getElementById('book-modal').addEventListener('click', e => {
+  if (e.target.id === 'book-modal') closeModal('book-modal');
+});
+
+async function saveBook() {
+  const id = document.getElementById('edit-book-id').value;
+  const formData = new FormData();
+  const fields = {
+    accession_number:'f-accession', title:'f-title', author:'f-author',
+    publisher:'f-publisher', edition:'f-edition', year_of_publication:'f-year',
+    department:'f-dept', category:'f-category', shelf_number:'f-shelf',
+    quantity:'f-qty', isbn:'f-isbn'
+  };
+  for (const [k,v] of Object.entries(fields)) {
+    formData.append(k, document.getElementById(v).value);
+  }
+  const coverFile = document.getElementById('f-cover').files[0];
+  if (coverFile) formData.append('cover', coverFile);
+
+  const url = id ? `/api/books/${id}` : '/api/books';
+  const method = id ? 'PUT' : 'POST';
+
+  const res = await fetch(url, { method, body: formData });
+  const data = await res.json();
+
+  if (data.error) { showToast(data.error, 'error'); return; }
+  showToast(id ? 'Book updated successfully!' : 'Book added successfully!', 'success');
+  closeModal('book-modal');
+  resetBookForm();
+  loadBooks();
+}
+
+function deleteBook(id, title) {
+  deleteBookId = id;
+  document.getElementById('del-book-title').textContent = title;
+  openModal('del-modal');
+}
+
+async function confirmDelete() {
+  const res = await fetch(`/api/books/${deleteBookId}`, { method: 'DELETE' });
+  const data = await res.json();
+  if (data.error) { showToast(data.error, 'error'); return; }
+  showToast('Book deleted.', 'success');
+  closeModal('del-modal');
+  loadBooks();
+}
+
+function exportBooks() {
+  window.open('/api/reports/export?type=all_books&format=csv', '_blank');
+}
+
+// Init
+loadCategories();
+loadBooks();
+
+// Handle "Add Book" button reset
+document.querySelector('[onclick="openModal(\'book-modal\')"]').addEventListener('click', resetBookForm);
+</script>
+{% endblock %}

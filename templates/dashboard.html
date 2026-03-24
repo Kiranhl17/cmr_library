@@ -1,0 +1,172 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — CMR Library{% endblock %}
+{% block page_title %}Dashboard{% endblock %}
+{% block breadcrumb %}Overview & Statistics{% endblock %}
+
+{% block extra_css %}
+<style>
+.chart-container { position: relative; height: 200px; }
+.recent-table td:first-child { font-family: monospace; font-size: 12px; color: var(--gold); }
+.activity-item {
+  display: flex; gap: 12px; align-items: flex-start;
+  padding: 12px 0; border-bottom: 1px solid var(--border);
+}
+.activity-item:last-child { border-bottom: none; }
+.activity-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  margin-top: 5px; flex-shrink: 0;
+}
+.activity-dot.issued { background: var(--warning); }
+.activity-dot.returned { background: var(--success); }
+.dot-added { background: var(--gold); }
+.activity-text { font-size: 13px; color: var(--text); line-height: 1.5; }
+.activity-time { font-size: 11px; color: var(--text-muted); }
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+.grid-3 { display: grid; grid-template-columns: 2fr 1fr; gap: 20px; }
+@media(max-width:900px){.grid-2,.grid-3{grid-template-columns:1fr;}}
+</style>
+{% endblock %}
+
+{% block content %}
+<div id="dash-content">
+  <!-- Stats Row -->
+  <div class="stats-grid" id="stats-grid">
+    <div class="stat-card"><div class="loading-spinner"><div class="spinner"></div></div></div>
+    <div class="stat-card"><div class="loading-spinner"><div class="spinner"></div></div></div>
+    <div class="stat-card"><div class="loading-spinner"><div class="spinner"></div></div></div>
+    <div class="stat-card"><div class="loading-spinner"><div class="spinner"></div></div></div>
+  </div>
+
+  <div class="grid-3">
+    <!-- Recent Books -->
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">📚 Recently Added Books</div>
+        <a href="/books" class="btn btn-outline btn-sm">View All →</a>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr>
+            <th>Accession</th><th>Title</th><th>Author</th><th>Category</th>
+          </tr></thead>
+          <tbody id="recent-books-body">
+            <tr><td colspan="4"><div class="loading-spinner"><div class="spinner"></div> Loading…</div></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Category Chart -->
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">📊 By Category</div>
+      </div>
+      <div class="card-body">
+        <div id="cat-chart"></div>
+      </div>
+    </div>
+  </div>
+
+  <div style="margin-top:20px"></div>
+
+  <div class="grid-2">
+    <!-- Recent Issues -->
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">🔄 Recent Transactions</div>
+        <a href="/issues" class="btn btn-outline btn-sm">View All →</a>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr>
+            <th>Student</th><th>USN</th><th>Book</th><th>Due</th><th>Status</th>
+          </tr></thead>
+          <tbody id="recent-issues-body">
+            <tr><td colspan="5"><div class="loading-spinner"><div class="spinner"></div></div></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Quick Actions -->
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">⚡ Quick Actions</div>
+      </div>
+      <div class="card-body" style="display:flex;flex-direction:column;gap:10px;">
+        <a href="/books" class="btn btn-primary" style="justify-content:center">➕ Add New Book</a>
+        <a href="/issues" class="btn btn-outline" style="justify-content:center">📤 Issue a Book</a>
+        <a href="/issues?tab=return" class="btn btn-outline" style="justify-content:center">📥 Return a Book</a>
+        <a href="/reports" class="btn btn-outline" style="justify-content:center">📊 Generate Report</a>
+        <a href="/reports?export=overdue" class="btn btn-danger btn-sm" style="justify-content:center">⚠️ View Overdue Books</a>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function loadDashboard() {
+  const res = await fetch('/api/stats');
+  const d = await res.json();
+
+  // Stats
+  const stats = [
+    { icon:'📚', label:'Total Books', value: d.total_books, color:'gold' },
+    { icon:'📤', label:'Issued Books', value: d.issued_books, color:'blue' },
+    { icon:'✅', label:'Available Copies', value: d.available_books, color:'green' },
+    { icon:'⚠️', label:'Overdue Books', value: d.overdue_books, color:'red' },
+  ];
+  document.getElementById('stats-grid').innerHTML = stats.map(s => `
+    <div class="stat-card">
+      <div class="stat-icon-wrap ${s.color}">${s.icon}</div>
+      <div class="stat-info">
+        <div class="value" style="counter-reset:n ${s.value}">${s.value}</div>
+        <div class="label">${s.label}</div>
+      </div>
+    </div>
+  `).join('');
+
+  // Recent books
+  document.getElementById('recent-books-body').innerHTML = d.recent_books.length
+    ? d.recent_books.map(b => `
+        <tr>
+          <td style="font-family:monospace;font-size:12px;color:var(--gold)">${b.accession_number}</td>
+          <td>${b.title.length > 30 ? b.title.slice(0,30)+'…' : b.title}</td>
+          <td style="color:var(--text-muted)">${b.author}</td>
+          <td><span class="badge badge-available" style="font-size:10px">${b.category||'—'}</span></td>
+        </tr>`).join('')
+    : '<tr><td colspan="4"><div class="empty-state"><div class="empty-title">No books yet</div></div></td></tr>';
+
+  // Recent issues
+  document.getElementById('recent-issues-body').innerHTML = d.recent_issues.length
+    ? d.recent_issues.map(i => `
+        <tr>
+          <td>${i.student_name}</td>
+          <td style="color:var(--text-muted);font-size:12px">${i.usn}</td>
+          <td style="font-size:12px">${(i.book_title||'').slice(0,25)}</td>
+          <td style="font-size:12px">${i.return_date}</td>
+          <td><span class="badge badge-${i.overdue?'overdue':i.status.toLowerCase()}">${i.overdue?'Overdue':i.status}</span></td>
+        </tr>`).join('')
+    : '<tr><td colspan="5"><div class="empty-state"><div class="empty-title">No issues yet</div></div></td></tr>';
+
+  // Category chart (simple bars)
+  const cats = d.category_distribution.slice(0,8);
+  const max = Math.max(...cats.map(c=>c.count), 1);
+  const colors = ['#c9a84c','#5b8dee','#4caf7d','#e05252','#f0a832','#9b59b6','#1abc9c','#e74c3c'];
+  document.getElementById('cat-chart').innerHTML = cats.map((c,i) => `
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+      <div style="width:90px;font-size:12px;color:var(--text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:right">${c.category}</div>
+      <div style="flex:1;height:22px;background:var(--bg);border-radius:4px;overflow:hidden">
+        <div style="width:${Math.round(c.count/max*100)}%;height:100%;background:${colors[i%colors.length]};border-radius:4px;transition:width 0.8s ease;display:flex;align-items:center;padding-left:6px">
+          <span style="font-size:10px;color:var(--sidebar);font-weight:700">${c.count}</span>
+        </div>
+      </div>
+    </div>
+  `).join('') || '<div class="empty-state"><div class="empty-title">No data</div></div>';
+}
+
+loadDashboard();
+</script>
+{% endblock %}

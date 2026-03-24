@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CMR Library — Login</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --navy: #0f1b2d;
+    --navy-mid: #162235;
+    --navy-light: #1e3050;
+    --gold: #c9a84c;
+    --gold-light: #e8c97a;
+    --cream: #f5f0e8;
+    --text: #e8e4dc;
+    --text-muted: #8a9baa;
+    --error: #e05252;
+    --success: #4caf7d;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    min-height: 100vh;
+    background: var(--navy);
+    font-family: 'DM Sans', sans-serif;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    position: relative;
+  }
+
+  .bg-pattern {
+    position: fixed; inset: 0;
+    background-image:
+      radial-gradient(ellipse 80% 50% at 20% 10%, rgba(201,168,76,0.08) 0%, transparent 50%),
+      radial-gradient(ellipse 60% 40% at 80% 90%, rgba(201,168,76,0.05) 0%, transparent 50%);
+    pointer-events: none;
+  }
+
+  .grid-overlay {
+    position: fixed; inset: 0;
+    background-image:
+      linear-gradient(rgba(201,168,76,0.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(201,168,76,0.04) 1px, transparent 1px);
+    background-size: 60px 60px;
+    pointer-events: none;
+  }
+
+  .login-wrapper {
+    display: flex;
+    width: 900px;
+    max-width: 95vw;
+    min-height: 560px;
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: 0 40px 100px rgba(0,0,0,0.6), 0 0 0 1px rgba(201,168,76,0.15);
+    position: relative;
+    z-index: 1;
+    animation: appear 0.6s ease both;
+  }
+
+  @keyframes appear {
+    from { opacity:0; transform: translateY(20px); }
+    to { opacity:1; transform: translateY(0); }
+  }
+
+  /* Left Panel */
+  .left-panel {
+    flex: 0 0 340px;
+    background: linear-gradient(160deg, #1a2d47, #0d1a2a);
+    padding: 48px 40px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    border-right: 1px solid rgba(201,168,76,0.2);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .left-panel::before {
+    content: '';
+    position: absolute;
+    bottom: -60px; left: -60px;
+    width: 280px; height: 280px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(201,168,76,0.08), transparent 70%);
+  }
+
+  .panel-logo {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .logo-icon {
+    width: 44px; height: 44px;
+    background: linear-gradient(135deg, var(--gold), var(--gold-light));
+    border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 22px;
+  }
+
+  .logo-text {
+    font-family: 'Playfair Display', serif;
+    font-size: 18px;
+    color: var(--cream);
+    line-height: 1.2;
+  }
+
+  .logo-text span { display: block; font-size: 11px; color: var(--text-muted); font-family: 'DM Sans', sans-serif; font-weight: 400; letter-spacing: 0.5px; }
+
+  .panel-content { }
+
+  .panel-title {
+    font-family: 'Playfair Display', serif;
+    font-size: 36px;
+    color: var(--cream);
+    line-height: 1.2;
+    margin-bottom: 16px;
+  }
+
+  .panel-title .accent { color: var(--gold); }
+
+  .panel-desc {
+    font-size: 14px;
+    color: var(--text-muted);
+    line-height: 1.7;
+  }
+
+  .panel-stats {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .stat-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 14px;
+    background: rgba(201,168,76,0.07);
+    border-radius: 8px;
+    border: 1px solid rgba(201,168,76,0.12);
+  }
+
+  .stat-icon { font-size: 18px; }
+
+  .stat-info .num {
+    font-weight: 600;
+    color: var(--gold-light);
+    font-size: 15px;
+  }
+
+  .stat-info .lbl {
+    font-size: 11px;
+    color: var(--text-muted);
+  }
+
+  /* Right Panel */
+  .right-panel {
+    flex: 1;
+    background: var(--navy-mid);
+    padding: 48px 44px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+  }
+
+  .right-panel h2 {
+    font-family: 'Playfair Display', serif;
+    font-size: 28px;
+    color: var(--cream);
+    margin-bottom: 6px;
+  }
+
+  .right-panel .subtitle {
+    font-size: 13px;
+    color: var(--text-muted);
+    margin-bottom: 36px;
+  }
+
+  .form-group { margin-bottom: 20px; }
+
+  .form-group label {
+    display: block;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    margin-bottom: 8px;
+  }
+
+  .input-wrap {
+    position: relative;
+  }
+
+  .input-wrap .icon {
+    position: absolute;
+    left: 14px; top: 50%;
+    transform: translateY(-50%);
+    font-size: 16px;
+    opacity: 0.5;
+    pointer-events: none;
+  }
+
+  .input-wrap input {
+    width: 100%;
+    padding: 13px 14px 13px 42px;
+    background: var(--navy);
+    border: 1.5px solid rgba(201,168,76,0.15);
+    border-radius: 8px;
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 14px;
+    transition: border-color 0.2s, box-shadow 0.2s;
+    outline: none;
+  }
+
+  .input-wrap input:focus {
+    border-color: var(--gold);
+    box-shadow: 0 0 0 3px rgba(201,168,76,0.12);
+  }
+
+  .input-wrap input::placeholder { color: rgba(255,255,255,0.2); }
+
+  .toggle-pass {
+    position: absolute; right: 14px; top: 50%;
+    transform: translateY(-50%);
+    background: none; border: none;
+    color: var(--text-muted); cursor: pointer;
+    font-size: 16px; padding: 4px;
+  }
+
+  .error-msg {
+    color: var(--error);
+    font-size: 12px;
+    margin-top: 6px;
+    display: none;
+  }
+
+  .error-msg.show { display: block; }
+
+  .btn-login {
+    width: 100%;
+    padding: 14px;
+    background: linear-gradient(135deg, var(--gold), var(--gold-light));
+    color: var(--navy);
+    border: none;
+    border-radius: 8px;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 15px;
+    font-weight: 700;
+    cursor: pointer;
+    letter-spacing: 0.3px;
+    transition: transform 0.15s, box-shadow 0.15s;
+    margin-top: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+  }
+
+  .btn-login:hover { transform: translateY(-1px); box-shadow: 0 8px 24px rgba(201,168,76,0.3); }
+  .btn-login:active { transform: translateY(0); }
+  .btn-login.loading { opacity: 0.7; pointer-events: none; }
+
+  .divider {
+    text-align: center;
+    margin: 24px 0;
+    position: relative;
+    font-size: 12px;
+    color: var(--text-muted);
+  }
+
+  .divider::before, .divider::after {
+    content: '';
+    position: absolute;
+    top: 50%; width: 40%;
+    height: 1px;
+    background: rgba(255,255,255,0.07);
+  }
+
+  .divider::before { left: 0; }
+  .divider::after { right: 0; }
+
+  .demo-creds {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+
+  .demo-card {
+    padding: 12px 14px;
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background 0.2s, border-color 0.2s;
+  }
+
+  .demo-card:hover {
+    background: rgba(201,168,76,0.06);
+    border-color: rgba(201,168,76,0.2);
+  }
+
+  .demo-card .role {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--gold);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 2px;
+  }
+
+  .demo-card .creds {
+    font-size: 12px;
+    color: var(--text-muted);
+  }
+
+  .demo-card .creds b { color: var(--text); }
+
+  @media (max-width: 700px) {
+    .left-panel { display: none; }
+    .right-panel { padding: 32px 24px; }
+  }
+</style>
+</head>
+<body>
+<div class="bg-pattern"></div>
+<div class="grid-overlay"></div>
+
+<div class="login-wrapper">
+  <div class="left-panel">
+    <div class="panel-logo">
+      <div class="logo-icon">📚</div>
+      <div class="logo-text">CMR Library<span>Computer Science Department</span></div>
+    </div>
+
+    <div class="panel-content">
+      <h1 class="panel-title">Digital <span class="accent">Library</span> Management</h1>
+      <p class="panel-desc">Modernizing the way books are tracked, issued, and managed across the department.</p>
+    </div>
+
+    <div class="panel-stats">
+      <div class="stat-item">
+        <div class="stat-icon">📖</div>
+        <div class="stat-info">
+          <div class="num">1,200+</div>
+          <div class="lbl">Books in collection</div>
+        </div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-icon">🎓</div>
+        <div class="stat-info">
+          <div class="num">500+</div>
+          <div class="lbl">Active students</div>
+        </div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-icon">🏛️</div>
+        <div class="stat-info">
+          <div class="num">CS Department</div>
+          <div class="lbl">Engineering College</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="right-panel">
+    <h2>Welcome Back</h2>
+    <p class="subtitle">Sign in to access the library management system</p>
+
+    <div class="form-group">
+      <label>Username</label>
+      <div class="input-wrap">
+        <span class="icon">👤</span>
+        <input type="text" id="username" placeholder="Enter your username" autocomplete="username">
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label>Password</label>
+      <div class="input-wrap">
+        <span class="icon">🔒</span>
+        <input type="password" id="password" placeholder="Enter your password" autocomplete="current-password">
+        <button class="toggle-pass" onclick="togglePassword()" type="button">👁</button>
+      </div>
+      <div class="error-msg" id="error-msg">Invalid username or password. Please try again.</div>
+    </div>
+
+    <button class="btn-login" id="login-btn" onclick="doLogin()">
+      <span>Sign In</span> <span>→</span>
+    </button>
+  </div>
+</div>
+
+<script>
+function fillCreds(u, p) {
+  document.getElementById('username').value = u;
+  document.getElementById('password').value = p;
+}
+
+function togglePassword() {
+  const pw = document.getElementById('password');
+  pw.type = pw.type === 'password' ? 'text' : 'password';
+}
+
+async function doLogin() {
+  const btn = document.getElementById('login-btn');
+  const err = document.getElementById('error-msg');
+  const username = document.getElementById('username').value.trim();
+  const password = document.getElementById('password').value;
+
+  if (!username || !password) { err.textContent = 'Please enter both fields.'; err.classList.add('show'); return; }
+
+  btn.classList.add('loading');
+  btn.innerHTML = '<span>Signing in…</span>';
+  err.classList.remove('show');
+
+  try {
+    const res = await fetch('/login', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({username, password})
+    });
+    const data = await res.json();
+    if (data.success) {
+      window.location.href = '/dashboard';
+    } else {
+      err.textContent = 'Invalid username or password.';
+      err.classList.add('show');
+      btn.classList.remove('loading');
+      btn.innerHTML = '<span>Sign In</span> <span>→</span>';
+    }
+  } catch {
+    err.textContent = 'Connection error. Please try again.';
+    err.classList.add('show');
+    btn.classList.remove('loading');
+    btn.innerHTML = '<span>Sign In</span> <span>→</span>';
+  }
+}
+
+document.addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
+</script>
+</body>
+</html>
